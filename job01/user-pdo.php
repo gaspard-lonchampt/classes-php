@@ -59,30 +59,30 @@ class user {
     }
 
     public function db_connexion() {
-      $db = mysqli_connect("localhost", "root", "root", "classes"); 
-      if (mysqli_connect_error()) {
-        echo "<pre>" ."Erreur de connexion"."</pre>";
-      }
-      return $db;
+        try {
+            $db = new PDO("mysql:host=localhost;dbname=classes", 'root', 'root');
+            $db -> setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+            return $db;
+        }
+        
+        catch (PDOException $e) {
+            echo 'Echec de la connexion : ' . $e->getMessage();
+        }
     }
 
     public function checklogin() {
 
       $db = $this->db_connexion();
-
-      $requete_same_login = "SELECT * FROM utilisateurs WHERE login = '$this->login'";
-      $result_same_login = mysqli_query($db, $requete_same_login);
-
-      $count = $result_same_login->num_rows;
+      $requete_same_login = $db->prepare("SELECT * FROM utilisateurs WHERE login = ?");
+      $requete_same_login->execute([$this->login]);
+      $count= $requete_same_login->rowCount();
 
       if ($count>0) {
-        $count = TRUE;
+        return TRUE;
       }
       else {
-        $count = FALSE;
+        return FALSE;
       }
-
-      return $count;
     }
     
     public function register() {
@@ -90,34 +90,29 @@ class user {
       $db = $this->db_connexion();
       $checklogin = $this->checklogin();
 
-      var_dump($checklogin);
-
       if ($checklogin == FALSE) {
 
         if (strlen($this->login) > 60) {
-               
-          // $error = TRUE;
-          // $errorMsg = "L'identifiant doit faire moins de 60 caractères";
           echo "L'identifiant doit faire moins de 60 caractères";
-
        }
 
         elseif ($this->login == $this->password) {
-        
-          // $error = TRUE;
-          // $errorMsg = "L'identifiant et le mot de passe doivent être différents";
           echo "L'identifiant et le mot de passe doivent être différents";
-
         }
 
         else {
-        
-        $hash = password_hash($this->password, PASSWORD_DEFAULT);
-        
-        $requete_register = "INSERT INTO utilisateurs (login,password,email,firstname,lastname) VALUES('$this->login','$hash','$this->email',' $this->firstname','$this->lastname')";      
-        $result_register = mysqli_query($db, $requete_register);
-        return [$this->login, $this->password, $this->email, $this->firstname, $this->lastname];  
+            $hash = password_hash($this->password, PASSWORD_DEFAULT);
+            $requete_register = $db->prepare("INSERT INTO utilisateurs (login,password,email,firstname,lastname) VALUES(:login,:password,:email,:firstname,:lastname)");      
+            $requete_register->execute(
+                array(
+                    'login' => $this->login,
+                    'password' => $hash,
+                    'email' => $this->email,
+                    'firstname' => $this->firstname,
+                    'lastname' => $this->lastname,
+                ));
 
+            return [$this->login, $hash, $this->email, $this->firstname, $this->lastname];  
         }
       }
 
@@ -127,57 +122,53 @@ class user {
     }
 
     public function connect() {
-
       $db = $this->db_connexion();
+      $requete_connexion = $db->prepare("SELECT * FROM utilisateurs WHERE login = ?");
+	  $requete_connexion->execute([$this->login]);
+	  $user = $requete_connexion->fetchall(); 
+      
+    //   var_dump($user);
 
-      $requete_connexion = "SELECT * FROM utilisateurs WHERE login = '$this->login'";      
-      $result_connexion = mysqli_query($db, $requete_connexion);
-
-      $user = mysqli_fetch_all($result_connexion);
-
-      // var_dump($user);
-
-      if ($user AND password_verify($this->password, $user[0][2])) {
-        
-        $this->id = $user[0][0];
-        $this->login = $user[0][1];
-        $this->password = $user[0][2];
-				$this->email = $user[0][3];
-        $this->firstname = $user[0][4];
-        $this->lastname = $user[0][5];
-        $this->connect = "1";
-        
+      if ($user AND password_verify($this->password, $user[0]['password'])) {
+        $this->id           = $user[0]['id'];
+        $this->login        = $user[0]['login'];
+        $this->password     = $user[0]['password'];
+		$this->email        = $user[0]['email'];
+        $this->firstname    = $user[0]['firstname'];
+        $this->lastname     = $user[0]['lastname'];
+        $this->connect      = "1";      
         return [$this->id, $this->login, $this->password, $this->email, $this->firstname, $this->lastname, $this->connect];
       }
+
       else {
-
-        // $error = TRUE;
-        // $errorMsg = "Mot de passe ou identifiant incorrect"; 
         echo "Mot de passe ou identifiant incorrect"; 
-
       }
     }
 
     public function disconnect() {
-
-      unset($this->id, $this->login, $this->password, $this->email, $this->firstname, $this->lastname, $this->connect);
-  
+            unset($this->id, $this->login, $this->password, $this->email, $this->firstname, $this->lastname, $this->connect);  
     }
 
     public function delete() {
-
       $db = $this->db_connexion();
-      $requete_delete = "DELETE FROM utilisateurs WHERE id = '$this->id'";
-      $requete_delete = mysqli_query($db, $requete_delete);
+      $requete_delete = $db->prepare("DELETE FROM utilisateurs WHERE id = ?");
+      $requete_delete->execute([$this->id]);
       $this->disconnect();
-
     }
 
     public function update() {
       $db = $this->db_connexion();
-      $newlogin = "Login4";
-      $requete_update = "UPDATE utilisateurs SET login= '$newlogin', email= '$this->email', password= '$this->password', firstname= '$this->firstname', lastname='$this->lastname' WHERE id = '$this->id'";
-      $requete_update = mysqli_query($db, $requete_update);
+      $hash = password_hash($this->password, PASSWORD_DEFAULT);
+      $requete_update = $db->prepare("UPDATE utilisateurs SET login= :login, email= :email, password= :password, firstname= :firstname, lastname= :lastname WHERE id = :id");
+      $requete_update->execute(
+        array(
+            'id' => $this->id,
+            'login' => "Update",
+            'password' => $hash,
+            'email' => "update_email",
+            'firstname' => "update_firstname",
+            'lastname' => "update_lastname",
+        ));
     }
 
     public function isConnected() {
@@ -190,15 +181,11 @@ class user {
     }
 
     public function getAllInfos() {
-
       $db = $this->db_connexion();
-      $requete_allinfos = "SELECT * FROM utilisateurs WHERE id = '$this->id'"; 
-      $requete_allinfos = mysqli_query($db, $requete_allinfos);
-
-      $result_allinfos = mysqli_fetch_all($requete_allinfos);
-
+      $requete_allinfos = $db->prepare("SELECT * FROM utilisateurs WHERE id = ?"); 
+      $requete_allinfos->execute([$this->id]);
+      $result_allinfos = $requete_allinfos->fetchall();
       return print_r($result_allinfos);
-
     }
 
     public function getLogin() {
@@ -220,24 +207,21 @@ class user {
 
     public function refresh() {
       $db = $this->db_connexion();
-      $requete_refresh = "SELECT * FROM utilisateurs WHERE id = '$this->id'"; 
-      $result_refresh = mysqli_query($db, $requete_refresh);
+      $requete_refresh = $db->prepare("SELECT * FROM utilisateurs WHERE id = ?"); 
+      $requete_refresh->execute([$this->id]);
+      $user = $requete_refresh->fetchall();
 
-      $user = mysqli_fetch_all($result_refresh);
-
-      $this->login = $user[0][1];
-      $this->password = $user[0][2];
-			$this->email = $user[0][3];
-      $this->firstname = $user[0][4];
-      $this->lastname = $user[0][5];
+      $this->login        = $user[0]['login'];
+      $this->password     = $user[0]['password'];
+      $this->email        = $user[0]['email'];
+      $this->firstname    = $user[0]['firstname'];
+      $this->lastname     = $user[0]['lastname'];
 
       return [$this->login, $this->password, $this->email, $this->firstname, $this->lastname];
-
     }
-
 }
 
-$user = new user("Login3", "password12345", "Constructmail", "Constructfirst", "Constructlast");
+$user = new user("Login4", "password12345", "Constructmail", "Constructfirst", "Constructlast");
 
 // $user_checklogin = $user->checklogin();
 // echo "<pre>" . "ligne 126". var_dump($user_checklogin). "</pre>";
