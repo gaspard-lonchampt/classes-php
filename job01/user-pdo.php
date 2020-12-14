@@ -8,26 +8,26 @@
 </head>
 <body>
   
-<form action="user.php" method="post">
+<form action="user-pdo.php" method="post">
   <div class="form-group">
     <label for="exampleInputEmail1">Email address</label>
-    <input type="email" class="form-control" id="exampleInputEmail1" aria-describedby="emailHelp" placeholder="Enter email">
+    <input type="email" class="form-control" id="exampleInputEmail1" name="email" aria-describedby="emailHelp" placeholder="Enter email">
   </div>
   <div class="form-group">
     <label for="login">Login</label>
-    <input type="email" class="form-control" id="login" aria-describedby="emailHelp" placeholder="Enter email">
+    <input type="text" class="form-control" id="login" name="login" placeholder="Enter login">
   </div>
   <div class="form-group">
     <label for="exampleInputPassword1">Password</label>
-    <input type="password" class="form-control" id="exampleInputPassword1" placeholder="Password">
+    <input type="password" class="form-control" id="exampleInputPassword1" name="password" placeholder="Password">
   </div>
   <div class="form-group">
     <label for="firstname">Firstname</label>
-    <input type="email" class="form-control" id="firstname" aria-describedby="emailHelp" placeholder="Enter email">
+    <input type="text" class="form-control" id="firstname"  name="firstname" placeholder="Enter firstname">
   </div>
   <div class="form-group">
     <label for="lastname">Lastname </label>
-    <input type="email" class="form-control" id="lastname" aria-describedby="emailHelp" placeholder="Enter email">
+    <input type="text" class="form-control" id="lastname" " name="lastname" placeholder="Enter lastname">
   </div>
 
   <button type="submit" class="btn btn-primary">Submit</button>
@@ -41,53 +41,48 @@
 
 class user {
 
-    private $id;
-    public $login;
-    public $email;
-    public $firstname;
-    public $lastname;
-    public $connect;
-
+  private $id;
+  private $connect;
+  private $db;
+  public $login;
+  public $password;
+  public $email;
+  public $firstname;
+  public $lastname;
+   
     public function __construct($login, $password, $email, $firstname, $lastname) {
-
       $this->login = $login;
       $this->password = $password;
       $this->email = $email;
       $this->firstname = $firstname;
       $this->lastname = $lastname;
       $this->connect = "0";
+      $this->db = $this->db_connexion();
+    }
+    
+    public function db_connexion() {
+      try {
+          $db = new PDO("mysql:host=localhost;dbname=classes", 'root', 'root');
+          $db -> setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+          return $db;
+      }
+      
+      catch (PDOException $e) {
+          echo 'Echec de la connexion : ' . $e->getMessage();
+      }
     }
 
-    public function db_connexion() {
-        try {
-            $db = new PDO("mysql:host=localhost;dbname=classes", 'root', 'root');
-            $db -> setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-            return $db;
-        }
-        
-        catch (PDOException $e) {
-            echo 'Echec de la connexion : ' . $e->getMessage();
-        }
-    }
 
     public function checklogin() {
 
-      $db = $this->db_connexion();
-      $requete_same_login = $db->prepare("SELECT * FROM utilisateurs WHERE login = ?");
+      $requete_same_login = $this->db->prepare("SELECT * FROM utilisateurs WHERE login = ?");
       $requete_same_login->execute([$this->login]);
-      $count= $requete_same_login->rowCount();
-
-      if ($count>0) {
-        return TRUE;
-      }
-      else {
-        return FALSE;
-      }
+      $loginExist = $requete_same_login->fetch();
+      return $loginExist;
     }
     
     public function register() {
       
-      $db = $this->db_connexion();
       $checklogin = $this->checklogin();
 
       if ($checklogin == FALSE) {
@@ -102,15 +97,13 @@ class user {
 
         else {
             $hash = password_hash($this->password, PASSWORD_DEFAULT);
-            $requete_register = $db->prepare("INSERT INTO utilisateurs (login,password,email,firstname,lastname) VALUES(:login,:password,:email,:firstname,:lastname)");      
-            $requete_register->execute(
-                array(
+            $requete_register = $this->db->prepare("INSERT INTO utilisateurs (login,password,email,firstname,lastname) VALUES(:login,:password,:email,:firstname,:lastname)");      
+            $requete_register->execute([
                     'login' => $this->login,
                     'password' => $hash,
                     'email' => $this->email,
                     'firstname' => $this->firstname,
-                    'lastname' => $this->lastname,
-                ));
+                    'lastname' => $this->lastname]);
 
             return [$this->login, $hash, $this->email, $this->firstname, $this->lastname];  
         }
@@ -122,10 +115,9 @@ class user {
     }
 
     public function connect() {
-      $db = $this->db_connexion();
-      $requete_connexion = $db->prepare("SELECT * FROM utilisateurs WHERE login = ?");
-	  $requete_connexion->execute([$this->login]);
-	  $user = $requete_connexion->fetchall(); 
+      $requete_connexion = $this->db->prepare("SELECT * FROM utilisateurs WHERE login = ?");
+	    $requete_connexion->execute([$this->login]);
+	    $user = $requete_connexion->fetchall(); 
       
     //   var_dump($user);
 
@@ -133,7 +125,7 @@ class user {
         $this->id           = $user[0]['id'];
         $this->login        = $user[0]['login'];
         $this->password     = $user[0]['password'];
-		$this->email        = $user[0]['email'];
+		    $this->email        = $user[0]['email'];
         $this->firstname    = $user[0]['firstname'];
         $this->lastname     = $user[0]['lastname'];
         $this->connect      = "1";      
@@ -150,16 +142,14 @@ class user {
     }
 
     public function delete() {
-      $db = $this->db_connexion();
-      $requete_delete = $db->prepare("DELETE FROM utilisateurs WHERE id = ?");
+      $requete_delete = $this->db->prepare("DELETE FROM utilisateurs WHERE id = ?");
       $requete_delete->execute([$this->id]);
       $this->disconnect();
     }
 
     public function update() {
-      $db = $this->db_connexion();
       $hash = password_hash($this->password, PASSWORD_DEFAULT);
-      $requete_update = $db->prepare("UPDATE utilisateurs SET login= :login, email= :email, password= :password, firstname= :firstname, lastname= :lastname WHERE id = :id");
+      $requete_update = $this->db->prepare("UPDATE utilisateurs SET login= :login, email= :email, password= :password, firstname= :firstname, lastname= :lastname WHERE id = :id");
       $requete_update->execute(
         array(
             'id' => $this->id,
@@ -181,11 +171,10 @@ class user {
     }
 
     public function getAllInfos() {
-      $db = $this->db_connexion();
-      $requete_allinfos = $db->prepare("SELECT * FROM utilisateurs WHERE id = ?"); 
+      $requete_allinfos = $this->db->prepare("SELECT * FROM utilisateurs WHERE id = ?"); 
       $requete_allinfos->execute([$this->id]);
       $result_allinfos = $requete_allinfos->fetchall();
-      return print_r($result_allinfos);
+      return [$this->id, $this->login, $this->password, $this->email, $this->firstname, $this->lastname, $this->connect];
     }
 
     public function getLogin() {
@@ -206,8 +195,7 @@ class user {
     }
 
     public function refresh() {
-      $db = $this->db_connexion();
-      $requete_refresh = $db->prepare("SELECT * FROM utilisateurs WHERE id = ?"); 
+      $requete_refresh = $this->db->prepare("SELECT * FROM utilisateurs WHERE id = ?"); 
       $requete_refresh->execute([$this->id]);
       $user = $requete_refresh->fetchall();
 
@@ -221,17 +209,22 @@ class user {
     }
 }
 
-$user = new user("Login4", "password12345", "Constructmail", "Constructfirst", "Constructlast");
+$login = $_POST['login'];
+$password = $_POST['password'];
+$email = $_POST['email'];
+$firstname = $_POST['firstname'];
+$lastname = $_POST['lastname'];
+
+$user = new user("$login", "$password", "$email", "$firstname", "$lastname");
 
 // $user_checklogin = $user->checklogin();
 // echo "<pre>" . "ligne 126". var_dump($user_checklogin). "</pre>";
 
-// $user_register = $user->register();
-// echo "<pre>" . var_dump($user_register). "</pre>";
+$user_register = $user->register();
+echo "<pre>" . var_dump($user_register). "</pre>";
 
-$user_connect = $user->connect();
-echo "<pre>" . var_dump($user_connect). "</pre>";
-
+// $user_connect = $user->connect();
+// echo "<pre>" . var_dump($user_connect). "</pre>";
 
 // $user_disconnect = $user->disconnect();
 // echo "<pre>" . var_dump($user_disconnect). "</pre>";
@@ -239,8 +232,8 @@ echo "<pre>" . var_dump($user_connect). "</pre>";
 // $user_delete = $user->delete();
 // echo "<pre>" . var_dump($user_delete). "</pre>";
 
-$user_update = $user->update();
-echo "<pre>" . var_dump($user_update). "</pre>";
+// $user_update = $user->update();
+// echo "<pre>" . var_dump($user_update). "</pre>";
 
 // $user_isConnected = $user->isConnected();
 // echo "<pre>" . var_dump($user_isConnected). "</pre>";
@@ -248,8 +241,10 @@ echo "<pre>" . var_dump($user_update). "</pre>";
 // $user_infos = $user->getAllInfos();
 // echo "<pre>" . var_dump($user_infos). "</pre>";
 
-$user_refresh = $user->refresh();
-echo "<pre>" . var_dump($user_refresh). "</pre>";
+// $user_refresh = $user->refresh();
+// echo "<pre>" . var_dump($user_refresh). "</pre>";
 
 // echo "<pre>" . var_dump($user->isconnect). "</pre>";
+
+
 ?>
